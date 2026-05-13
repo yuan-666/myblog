@@ -43,13 +43,13 @@ const isZh = () => locale.value === 'zh'
           </div>
           <svg class="link-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
         </router-link>
-        <a href="https://yuan6.cn" target="_blank" rel="noopener" class="link-card">
+        <a href="https://me.yuan6.cn" target="_blank" rel="noopener" class="link-card">
           <div class="link-icon web">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           </div>
           <div class="link-text">
-            <span class="link-label">yuan6.cn</span>
-            <span class="link-desc">{{ t('about.links.home') }}</span>
+            <span class="link-label">me.yuan6.cn</span>
+            <span class="link-desc">{{ isZh() ? '我的个人作品集合' : 'My personal portfolio collection' }}</span>
           </div>
           <svg class="link-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
         </a>
