@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Experiments · Demo</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a14;color:#e4e4e7;padding:16px;min-height:100vh}
+.app{max-width:1100px;margin:0 auto}
+h1{font-size:20px;text-align:center;margin-bottom:16px;color:#fff}
+.tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;justify-content:center}
+.tab{padding:8px 16px;border-radius:8px;border:1px solid #27272a;background:#111122;color:#a1a1aa;font-size:12px;cursor:pointer;transition:all .2s}
+.tab:hover{border-color:#6366f1;color:#e4e4e7}
+.tab.active{background:#6366f1;border-color:#6366f1;color:#fff}
+.panel{background:#111122;border-radius:14px;padding:18px;box-shadow:0 4px 20px rgba(0,0,0,.3);display:none}
+.panel.active{display:block}
+.panel h2{font-size:15px;margin-bottom:12px;color:#fff}
+.panel h3{font-size:13px;margin:14px 0 8px;color:#a1a1aa}
+.panel p{font-size:13px;color:#a1a1aa;line-height:1.7;margin-bottom:10px}
+.row{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+canvas{background:#0a0a14;border:1px solid #27272a;border-radius:8px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.controls label{font-size:12px;color:#71717a}
+.controls input,.controls select{padding:6px 10px;border-radius:6px;border:1px solid #27272a;background:#0a0a14;color:#e4e4e7;font-size:12px;font-family:inherit}
+.btn{padding:7px 16px;border-radius:8px;border:1px solid #6366f1;background:#6366f1;color:#fff;font-size:12px;cursor:pointer;font-family:inherit;transition:opacity .2s}
+.btn:hover{opacity:.85}
+.btn.secondary{background:transparent;color:#a1a1aa;border-color:#27272a}
+.btn.secondary:hover{border-color:#6366f1;color:#e4e4e7}
+.stats{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}
+.stat{padding:8px 12px;background:#0a0a14;border-radius:6px;border:1px solid #27272a}
+.stat .label{font-size:10px;color:#71717a;text-transform:uppercase}
+.stat .value{font-size:14px;color:#fff;font-family:monospace}
+.similarity-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}
+.similarity-table th,.similarity-table td{padding:6px 10px;text-align:center;border:1px solid #27272a}
+.similarity-table th{background:#1a1a2e;color:#a1a1aa}
+.similarity-table td{color:#e4e4e7}
+.heatmap-cell{transition:background .3s}
+.sentence-input{width:100%;padding:8px;border-radius:6px;border:1px solid #27272a;background:#0a0a14;color:#e4e4e7;font-size:13px;font-family:inherit;resize:vertical}
+.app{animation:rise .45s ease both}.panel.active{animation:panelIn .22s ease}.tab,.btn{will-change:transform}.tab:hover,.btn:hover{transform:translateY(-1px)}canvas{transition:border-color .18s,box-shadow .18s}canvas:hover{border-color:#3b4261;box-shadow:0 0 0 3px rgba(99,102,241,.08)}.stat{transition:transform .15s}.stat:hover{transform:translateY(-1px)}@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes panelIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style></head>
+<body>
+<script>const L=((p=new URLSearchParams(location.search)).get('lang')||navigator.language.slice(0,2))==='en'?'en':'zh';const T=(zh,en)=>L==='en'?en:zh;</script>
+<div class="app">
+<h1>🤖 <script>document.write(T('AI 与智能计算实验合集','AI & Intelligent Computing Experiments'))</script></h1>
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('pca')"><script>document.write(T('PCA 降维','PCA Visualization'))</script></button>
+  <button class="tab" onclick="switchTab('similarity')"><script>document.write(T('语句相似度','Sentence Similarity'))</script></button>
+  <button class="tab" onclick="switchTab('face')"><script>document.write(T('人脸检测','Face Detection'))</script></button>
+  <button class="tab" onclick="switchTab('vehicle')"><script>document.write(T('车辆计数','Vehicle Counting'))</script></button>
+</div>
+
+<div class="panel active" id="panel-pca">
+  <h2><script>document.write(T('PCA 降维可视化','PCA Dimensionality Reduction'))</script></h2>
+  <p><script>document.write(T('生成高维随机数据，并将其投影到二维主成分上。箭头指向最大方差方向。','Generate high-dimensional random data and project it onto 2D principal components. Arrows show the direction of maximum variance.'))</script></p>
+  <div class="controls">
+    <label><script>document.write(T('维度','Dims'))</script>: <input type="number" id="pca-dims" value="10" min="3" max="50" style="width:60px"></label>
+    <label><script>document.write(T('样本','Samples'))</script>: <input type="number" id="pca-samples" value="200" min="50" max="500" style="width:60px"></label>
+    <button class="btn" onclick="runPCA()"><script>document.write(T('生成并降维','Generate & Reduce'))</script></button>
+  </div>
+  <div class="row">
+    <canvas id="pcaCanvas" width="480" height="400"></canvas>
+    <div>
+      <div class="stats" id="pca-stats"></div>
+      <h3><script>document.write(T('解释方差','Explained Variance'))</script></h3>
+      <canvas id="varCanvas" width="300" height="160"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-similarity">
+  <h2><script>document.write(T('语句相似度（余弦相似度）','Sentence Similarity (Cosine Similarity)'))</script></h2>
+  <p><script>document.write(T('在下方输入句子（每行一句）。本 Demo 使用简单的词袋模型来计算句子间的余弦相似度。','Enter sentences below (one per line). This demo uses a simple bag-of-words model to compute cosine similarity between sentences.'))</script></p>
+  <div class="controls">
+    <textarea class="sentence-input" id="sentences" rows="5"><script>document.write(T('机器学习非常有趣\n深度学习正在改变AI\n我喜欢用Python编程\nPython是一门很棒的语言\n神经网络非常强大'))</script></textarea>
+  </div>
+  <button class="btn" onclick="computeSimilarity()" style="margin-bottom:12px"><script>document.write(T('计算相似度','Compute Similarity'))</script></button>
+  <div id="similarity-result"></div>
+</div>
+
+<div class="panel" id="panel-face">
+  <h2><script>document.write(T('Haar 级联人脸检测模拟','Haar Cascade Face Detection Simulation'))</script></h2>
+  <p><script>document.write(T('在画布上点击放置"人脸"（彩色矩形）。本 Demo 模拟 Haar 特征如何扫描图像来检测人脸模式。','Click on the canvas to place "faces" (colored rectangles). This demo simulates how Haar features scan across the image to detect face-like patterns.'))</script></p>
+  <div class="controls">
+    <button class="btn" onclick="startFaceDetect()"><script>document.write(T('开始扫描','Start Scan'))</script></button>
+    <button class="btn secondary" onclick="clearFaces()"><script>document.write(T('清除','Clear'))</script></button>
+    <button class="btn" style="background:linear-gradient(135deg,#6366f1,#a855f7);border-color:transparent" onclick="aiAnalyzeFace()">🤖 <script>document.write(T('AI 分析','AI Analyze'))</script></button>
+  </div>
+  <div class="row">
+    <canvas id="faceCanvas" width="500" height="360"></canvas>
+    <div>
+      <h3><script>document.write(T('检测日志','Detection Log'))</script></h3>
+      <div id="face-log" style="font-size:11px;color:#71717a;font-family:monospace;line-height:1.8;max-height:300px;overflow-y:auto;padding:8px;background:#0a0a14;border-radius:6px;border:1px solid #27272a;width:280px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-vehicle">
+  <h2><script>document.write(T('车辆计数（背景差分法）','Vehicle Counting (Background Subtraction)'))</script></h2>
+  <p><script>document.write(T('模拟交通场景。展示背景差分法如何检测运动物体（车辆），并在车辆越过检测线时进行计数。','Simulated traffic scene. This demo shows how background subtraction detects moving objects (vehicles) and counts them as they cross the detection line.'))</script></p>
+  <div class="controls">
+    <button class="btn" id="vehicle-toggle" onclick="toggleVehicle()"><script>document.write(T('开始模拟','Start Simulation'))</script></button>
+    <label><script>document.write(T('速度','Speed'))</script>: <select id="vehicle-speed"><option value="1"><script>document.write(T('慢','Slow'))</script></option><option value="2" selected><script>document.write(T('正常','Normal'))</script></option><option value="4"><script>document.write(T('快','Fast'))</script></option></select></label>
+  </div>
+  <div class="row">
+    <canvas id="vehicleCanvas" width="560" height="320"></canvas>
+    <div>
+      <div class="stats">
+        <div class="stat"><div class="label" id="v-count-label"><script>document.write(T('计数','Count'))</script></div><div class="value" id="v-count">0</div></div>
+        <div class="stat"><div class="label" id="v-fps-label">FPS</div><div class="value" id="v-fps">0</div></div>
+      </div>
+      <h3><script>document.write(T('工作原理','How it works'))</script></h3>
+      <p style="font-size:11px"><script>document.write(T('1. 背景模型学习静态场景<br>2. 运动物体产生前景遮罩<br>3. 检测并跟踪轮廓<br>4. 越过检测线即计数','1. Background model learns the static scene<br>2. Moving objects create foreground mask<br>3. Contours are detected and tracked<br>4. Crossing the line increments the count'))</script></p>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+function runPCA() {
+  const dims = parseInt(document.getElementById('pca-dims').value);
+  const n = parseInt(document.getElementById('pca-samples').value);
+  const canvas = document.getElementById('pcaCanvas');
+  const ctx = canvas.getContext('2d');
+  const vcanvas = document.getElementById('varCanvas');
+  const vctx = vcanvas.getContext('2d');
+
+  const data = [];
+  for (let i = 0; i < n; i++) {
+    const pt = [];
+    for (let d = 0; d < dims; d++) {
+      const scale = d < 3 ? 3 : (d < 6 ? 1.5 : 0.5);
+      pt.push((Math.random() - 0.5) * 2 * scale);
+    }
+    data.push(pt);
+  }
+
+  const means = new Array(dims).fill(0);
+  for (const pt of data) for (let d = 0; d < dims; d++) means[d] += pt[d];
+  for (let d = 0; d < dims; d++) means[d] /= n;
+  const centered = data.map(pt => pt.map((v, d) => v - means[d]));
+
+  const variances = new Array(dims).fill(0);
+  for (const pt of centered) for (let d = 0; d < dims; d++) variances[d] += pt[d] * pt[d];
+  for (let d = 0; d < dims; d++) variances[d] /= n;
+
+  const indices = variances.map((v, i) => ({v, i})).sort((a, b) => b.v - a.v);
+  const d1 = indices[0].i, d2 = indices[1].i;
+  const proj = centered.map(pt => [pt[d1], pt[d2]]);
+  const maxV = Math.sqrt(Math.max(...proj.map(p => p[0]*p[0] + p[1]*p[1]))) || 1;
+
+  ctx.fillStyle = '#0a0a14'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const scale = Math.min(cx, cy) / maxV * 0.85;
+
+  ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 1;
+  for (let i = -5; i <= 5; i++) {
+    ctx.beginPath(); ctx.moveTo(cx + i * scale, 0); ctx.lineTo(cx + i * scale, canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, cy + i * scale); ctx.lineTo(canvas.width, cy + i * scale); ctx.stroke();
+  }
+  ctx.strokeStyle = '#52525b'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(canvas.width, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height); ctx.stroke();
+
+  for (const p of proj) {
+    const x = cx + p[0] * scale, y = cy - p[1] * scale;
+    const dist = Math.sqrt(p[0]*p[0] + p[1]*p[1]) / maxV;
+    const r = 2 + dist * 3;
+    ctx.beginPath();
+    ctx.fillStyle = `hsl(${240 + dist * 60}, 70%, ${50 + dist * 30}%)`;
+    ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  ctx.fillStyle = '#a1a1aa'; ctx.font = '11px monospace';
+  ctx.fillText(`PC1 (${T('维度','dim')} ${d1}) →`, canvas.width - 100, cy - 6);
+  ctx.fillText(`↑ PC2 (${T('维度','dim')} ${d2})`, cx + 6, 14);
+
+  vctx.fillStyle = '#0a0a14'; vctx.fillRect(0, 0, vcanvas.width, vcanvas.height);
+  const totalVar = variances.reduce((a, b) => a + b, 0);
+  const barW = vcanvas.width / Math.min(dims, 15) - 4;
+  const maxVar = Math.max(...variances);
+  for (let i = 0; i < Math.min(dims, 15); i++) {
+    const h = (variances[indices[i].i] / maxVar) * (vcanvas.height - 30);
+    const x = 2 + i * (barW + 4);
+    const y = vcanvas.height - h - 20;
+    vctx.fillStyle = i < 2 ? '#6366f1' : '#27272a';
+    vctx.fillRect(x, y, barW, h);
+    vctx.fillStyle = '#71717a'; vctx.font = '9px monospace';
+    vctx.fillText('D' + indices[i].i, x + 2, vcanvas.height - 6);
+  }
+  vctx.fillStyle = '#a1a1aa'; vctx.font = '11px sans-serif';
+  const ev1 = (variances[d1] / totalVar * 100).toFixed(1);
+  const ev2 = (variances[d2] / totalVar * 100).toFixed(1);
+  vctx.fillText(`PC1: ${ev1}%  PC2: ${ev2}%  ${T('合计','Total')}: ${(+ev1 + +ev2).toFixed(1)}%`, 8, 14);
+
+  document.getElementById('pca-stats').innerHTML = `
+    <div class="stat"><div class="label">${T('维度','Dimensions')}</div><div class="value">${dims}</div></div>
+    <div class="stat"><div class="label">${T('样本','Samples')}</div><div class="value">${n}</div></div>
+    <div class="stat"><div class="label">PC1 ${T('方差','Var')}</div><div class="value">${ev1}%</div></div>
+    <div class="stat"><div class="label">PC2 ${T('方差','Var')}</div><div class="value">${ev2}%</div></div>
+  `;
+}
+runPCA();
+
+function tokenize(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 0);
+}
+
+function computeSimilarity() {
+  const raw = document.getElementById('sentences').value.trim().split('\n').filter(s => s.trim());
+  if (raw.length < 2) {
+    document.getElementById('similarity-result').innerHTML = `<p style="color:#f43f5e">${T('请至少输入 2 个句子。','Enter at least 2 sentences.')}</p>`;
+    return;
+  }
+  const sentences = raw.map(s => s.trim());
+  const vocab = [...new Set(sentences.flatMap(tokenize))].sort();
+  const vectors = sentences.map(s => {
+    const tokens = tokenize(s);
+    return vocab.map(word => tokens.filter(t => t === word).length);
+  });
+  const n = sentences.length;
+  const sim = [];
+  for (let i = 0; i < n; i++) {
+    sim[i] = [];
+    for (let j = 0; j < n; j++) {
+      const a = vectors[i], b = vectors[j];
+      const dot = a.reduce((s, v, k) => s + v * b[k], 0);
+      const na = Math.sqrt(a.reduce((s, v) => s + v * v, 0));
+      const nb = Math.sqrt(b.reduce((s, v) => s + v * v, 0));
+      sim[i][j] = na && nb ? (dot / (na * nb)) : 0;
+    }
+  }
+  let html = '<table class="similarity-table"><tr><th></th>';
+  for (let i = 0; i < n; i++) html += `<th>S${i+1}</th>`;
+  html += '</tr>';
+  for (let i = 0; i < n; i++) {
+    html += `<tr><th style="text-align:left;max-width:120px;overflow:hidden;text-overflow:ellipsis">${sentences[i].substring(0, 20)}</th>`;
+    for (let j = 0; j < n; j++) {
+      const s = sim[i][j];
+      const hue = 240 - s * 240;
+      const bg = i === j ? '#1a1a2e' : `hsla(${hue}, 70%, 50%, ${0.1 + s * 0.4})`;
+      html += `<td class="heatmap-cell" style="background:${bg};color:${s > 0.5 ? '#fff' : '#a1a1aa'}">${s.toFixed(2)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  document.getElementById('similarity-result').innerHTML = html;
+}
+
+const faceCanvas = document.getElementById('faceCanvas');
+const fctx = faceCanvas.getContext('2d');
+let faces = [];
+
+function drawFaceScene() {
+  fctx.fillStyle = '#0a0a14'; fctx.fillRect(0, 0, faceCanvas.width, faceCanvas.height);
+  for (let i = 0; i < 15; i++) {
+    fctx.fillStyle = `rgba(39,39,42,${0.3 + Math.random() * 0.3})`;
+    const x = Math.random() * faceCanvas.width, y = Math.random() * faceCanvas.height;
+    const w = 20 + Math.random() * 60, h = 20 + Math.random() * 60;
+    fctx.fillRect(x, y, w, h);
+  }
+  for (const f of faces) {
+    fctx.strokeStyle = '#22c55e'; fctx.lineWidth = 2;
+    fctx.strokeRect(f.x, f.y, f.w, f.h);
+    fctx.fillStyle = 'rgba(34,197,94,0.1)';
+    fctx.fillRect(f.x, f.y, f.w, f.h);
+    fctx.fillStyle = '#22c55e';
+    fctx.fillRect(f.x + f.w * 0.25, f.y + f.h * 0.3, f.w * 0.15, f.h * 0.1);
+    fctx.fillRect(f.x + f.w * 0.6, f.y + f.h * 0.3, f.w * 0.15, f.h * 0.1);
+    fctx.beginPath();
+    fctx.arc(f.x + f.w * 0.5, f.y + f.h * 0.6, f.w * 0.15, 0, Math.PI);
+    fctx.stroke();
+  }
+}
+drawFaceScene();
+
+faceCanvas.addEventListener('click', e => {
+  const r = faceCanvas.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  faces.push({x: x - 30, y: y - 35, w: 60, h: 70});
+  drawFaceScene();
+});
+
+function clearFaces() { faces = []; drawFaceScene(); document.getElementById('face-log').innerHTML = ''; }
+
+const GLM_PROXY = 'https://myblog-api.8pm.top/api/glm';
+async function aiAnalyzeFace() {
+  const log = document.getElementById('face-log');
+  log.innerHTML = `<div style="color:#a855f7">🤖 ${T('GLM-4.6V-Flash 分析中...','GLM-4.6V-Flash analyzing...')}</div>`;
+  try {
+    const b64 = faceCanvas.toDataURL('image/png').split(',')[1];
+    const resp = await fetch(GLM_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'glm-4.6v-flash',
+        messages: [{ role: 'user', content: [
+          { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
+          { type: 'text', text: T('这张图片中有什么？用简短的中文描述','What do you see in this image? Describe briefly in English.') }
+        ]}]
+      })
+    });
+    const data = await resp.json();
+    const reply = data.choices?.[0]?.message?.content || T('无法识别', 'Unable to analyze');
+    log.innerHTML = `<div style="color:#22c55e;margin-top:4px">${T('AI 分析结果：','AI Analysis: ')}${reply}</div><div style="color:#52525b;font-size:10px;margin-top:4px">${T('GLM-4.6V-Flash','GLM-4.6V-Flash')}</div>`;
+  } catch (err) {
+    log.innerHTML = `<div style="color:#f43f5e">${T('网络错误：','Network Error: ')}${err.message}</div>`;
+  }
+}
+
+async function startFaceDetect() {
+  const log = document.getElementById('face-log');
+  log.innerHTML = '';
+  const winSize = 60;
+  let detections = 0;
+  for (let y = 0; y <= faceCanvas.height - winSize; y += 15) {
+    for (let x = 0; x <= faceCanvas.width - winSize; x += 15) {
+      let matched = false;
+      for (const f of faces) {
+        const ix = (x + winSize/2), iy = (y + winSize/2);
+        if (ix > f.x && ix < f.x + f.w && iy > f.y && iy < f.y + f.h) { matched = true; break; }
+      }
+      fctx.strokeStyle = matched ? 'rgba(99,102,241,0.6)' : 'rgba(244,63,94,0.15)';
+      fctx.lineWidth = matched ? 2 : 1;
+      fctx.strokeRect(x, y, winSize, winSize);
+      if (matched) {
+        detections++;
+        log.innerHTML += `<div style="color:#6366f1">✓ ${T('检测到人脸','Face detected')} (${x},${y})</div>`;
+        log.scrollTop = log.scrollHeight;
+        await new Promise(r => setTimeout(r, 30));
+      }
+      if (Math.random() < 0.02) await new Promise(r => setTimeout(r, 5));
+    }
+  }
+  log.innerHTML += `<div style="color:#22c55e;margin-top:8px">✅ ${T(`扫描完成，检测到 ${detections} 个人脸区域。`,`Scan complete. ${detections} face regions detected.`)}</div>`;
+  setTimeout(drawFaceScene, 2000);
+}
+
+const vCanvas = document.getElementById('vehicleCanvas');
+const vctx = vCanvas.getContext('2d');
+let vRunning = false, vAnimId = null, vCount = 0, vLastTime = 0;
+let vehicles = [], roadY = 160;
+
+function drawRoad() {
+  vctx.fillStyle = '#0a0a14'; vctx.fillRect(0, 0, vCanvas.width, vCanvas.height);
+  vctx.fillStyle = '#1a1a2e'; vctx.fillRect(0, roadY - 40, vCanvas.width, 80);
+  vctx.strokeStyle = '#52525b'; vctx.setLineDash([20, 20]); vctx.lineWidth = 2;
+  vctx.beginPath(); vctx.moveTo(0, roadY); vctx.lineTo(vCanvas.width, roadY); vctx.stroke();
+  vctx.setLineDash([]);
+  vctx.strokeStyle = '#f43f5e'; vctx.lineWidth = 2;
+  vctx.beginPath(); vctx.moveTo(vCanvas.width * 0.75, roadY - 45); vctx.lineTo(vCanvas.width * 0.75, roadY + 45); vctx.stroke();
+  vctx.fillStyle = '#f43f5e'; vctx.font = '10px monospace';
+  vctx.fillText(T('检测线','Detection Line'), vCanvas.width * 0.75 - 30, roadY - 50);
+}
+
+function spawnVehicle() {
+  const colors = ['#6366f1', '#a855f7', '#22c55e', '#f59e0b', '#06b6d4'];
+  vehicles.push({
+    x: -60, y: roadY - 25 + Math.random() * 10,
+    w: 50 + Math.random() * 30, h: 18 + Math.random() * 8,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    speed: 1 + Math.random() * 2, counted: false,
+    id: Math.floor(Math.random() * 10000)
+  });
+}
+
+function updateVehicles() {
+  const speedMul = parseInt(document.getElementById('vehicle-speed').value);
+  for (const v of vehicles) {
+    v.x += v.speed * speedMul;
+    if (!v.counted && v.x + v.w/2 > vCanvas.width * 0.75) { v.counted = true; vCount++; document.getElementById('v-count').textContent = vCount; }
+  }
+  vehicles = vehicles.filter(v => v.x < vCanvas.width + 20);
+}
+
+function drawVehicles() {
+  drawRoad();
+  for (const v of vehicles) {
+    vctx.fillStyle = v.color; vctx.fillRect(v.x, v.y, v.w, v.h);
+    vctx.fillStyle = '#0a0a14';
+    vctx.fillRect(v.x + v.w * 0.2, v.y + 2, v.w * 0.25, v.h * 0.4);
+    vctx.fillRect(v.x + v.w * 0.55, v.y + 2, v.w * 0.25, v.h * 0.4);
+    vctx.fillStyle = '#27272a';
+    vctx.beginPath(); vctx.arc(v.x + v.w * 0.2, v.y + v.h, 5, 0, Math.PI * 2); vctx.fill();
+    vctx.beginPath(); vctx.arc(v.x + v.w * 0.8, v.y + v.h, 5, 0, Math.PI * 2); vctx.fill();
+    vctx.fillStyle = '#fbbf24';
+    vctx.beginPath(); vctx.arc(v.x + v.w - 2, v.y + 4, 2, 0, Math.PI * 2); vctx.fill();
+    if (v.x + v.w/2 > vCanvas.width * 0.6 && v.x + v.w/2 < vCanvas.width * 0.85) {
+      vctx.strokeStyle = '#22c55e'; vctx.lineWidth = 1.5;
+      vctx.strokeRect(v.x - 2, v.y - 2, v.w + 4, v.h + 4);
+    }
+  }
+}
+
+function animateVehicles(timestamp) {
+  if (!vRunning) return;
+  if (timestamp - vLastTime > 30) {
+    if (Math.random() < 0.03) spawnVehicle();
+    updateVehicles(); drawVehicles(); vLastTime = timestamp;
+  }
+  vAnimId = requestAnimationFrame(animateVehicles);
+}
+
+function toggleVehicle() {
+  const btn = document.getElementById('vehicle-toggle');
+  if (vRunning) {
+    vRunning = false; cancelAnimationFrame(vAnimId);
+    btn.textContent = T('开始模拟','Start Simulation'); btn.classList.remove('secondary');
+  } else {
+    vRunning = true; vCount = 0; vehicles = [];
+    document.getElementById('v-count').textContent = '0'; vLastTime = 0;
+    btn.textContent = T('停止模拟','Stop Simulation'); btn.classList.add('secondary');
+    vAnimId = requestAnimationFrame(animateVehicles);
+  }
+}
+drawRoad();
+</script>
+</body>
+</html>

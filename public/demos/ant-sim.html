@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ant Colony Simulation · Demo</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0b0c14;color:#e4e4e7;min-height:100vh;padding:18px;overflow-x:hidden}
+.app{max-width:1120px;margin:0 auto}
+h1{font-size:22px;font-weight:750;text-align:center;margin-bottom:6px}
+.sub{font-size:12px;color:#8b8f9f;text-align:center;margin-bottom:14px}
+.stage{display:grid;grid-template-columns:minmax(320px,560px) 320px;gap:16px;justify-content:center;align-items:start}
+.canvas-wrap{position:relative;background:#111321;border:1px solid #24283b;border-radius:14px;overflow:hidden;box-shadow:0 16px 46px rgba(0,0,0,.38)}
+canvas{display:block;width:100%;height:auto;aspect-ratio:1/1}
+.hud{position:absolute;left:12px;right:12px;bottom:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;pointer-events:none}
+.stat{background:rgba(10,12,22,.76);border:1px solid rgba(148,163,184,.16);border-radius:8px;padding:8px 10px;backdrop-filter:blur(10px)}
+.stat-val{display:block;font:700 18px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#fff}
+.stat-lbl{display:block;margin-top:3px;font-size:9px;color:#8b8f9f;text-transform:uppercase;letter-spacing:.5px}
+.panel{background:#111321;border:1px solid #24283b;border-radius:14px;padding:14px;box-shadow:0 16px 46px rgba(0,0,0,.28)}
+.controls{display:grid;gap:11px}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{padding:9px 12px;border-radius:8px;border:1px solid #2a3045;background:#171a2a;color:#e4e4e7;font:600 12px/1.2 inherit;cursor:pointer;transition:transform .15s,background .15s,border-color .15s}
+button:hover{transform:translateY(-1px);background:#20243a;border-color:#3b4364}
+button.primary{background:#4f46e5;border-color:#6366f1;color:#fff;box-shadow:0 8px 22px rgba(79,70,229,.25)}
+button.danger{color:#fda4af}
+label{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-size:11px;color:#9ca3af}
+label span{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#d7d9e3}
+input[type=range]{grid-column:1/3;width:100%;accent-color:#6366f1}
+select{padding:7px 9px;border-radius:8px;border:1px solid #2a3045;background:#0b0c14;color:#e4e4e7;font-size:12px}
+.toggles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.toggle{display:flex;align-items:center;gap:7px;padding:8px;border:1px solid #24283b;border-radius:8px;background:#0d0f1b;font-size:11px;color:#c4c7d1}
+.toggle input{accent-color:#6366f1}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px}
+.legend span{display:flex;align-items:center;gap:6px;font-size:11px;color:#a1a1aa}
+.dot{width:9px;height:9px;border-radius:50%;box-shadow:0 0 12px currentColor}
+.status{margin-top:12px;padding:10px;border-radius:10px;background:#0d0f1b;border:1px solid #24283b;color:#a1a1aa;font-size:12px;line-height:1.55}
+.progress{height:5px;margin-top:8px;background:#1f2436;border-radius:99px;overflow:hidden}.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#22c55e,#6366f1,#a855f7);transition:width .25s}
+@media(max-width:860px){body{padding:12px}.stage{grid-template-columns:1fr}.panel{order:-1}.hud{grid-template-columns:repeat(2,1fr)}}
+</style></head>
+<body>
+<script>const L=((p=new URLSearchParams(location.search)).get('lang')||navigator.language.slice(0,2))==='en'?'en':'zh';const T=(zh,en)=>L==='en'?en:zh;</script>
+<div class="app">
+<h1><script>document.write(T('四只蚂蚁追踪模拟','Ant Pursuit Playground'))</script></h1>
+<p class="sub"><script>document.write(T('拖动控制项观察追踪曲线、收敛速度与运动方向的变化','Tune the controls to see pursuit curves, convergence speed, and chase direction change'))</script></p>
+<div class="stage">
+  <div class="canvas-wrap">
+    <canvas id="canvas" width="560" height="560"></canvas>
+    <div class="hud">
+      <div class="stat"><span class="stat-val" id="step-count">0</span><span class="stat-lbl"><script>document.write(T('步数','Steps'))</script></span></div>
+      <div class="stat"><span class="stat-val" id="dist-display">0</span><span class="stat-lbl"><script>document.write(T('边长和','Perimeter'))</script></span></div>
+      <div class="stat"><span class="stat-val" id="center-display">0</span><span class="stat-lbl"><script>document.write(T('距中心','Center'))</script></span></div>
+      <div class="stat"><span class="stat-val" id="status-display">Ready</span><span class="stat-lbl"><script>document.write(T('状态','Status'))</script></span></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="controls">
+      <div class="btn-row">
+        <button class="primary" id="btn-start" onclick="toggleRun()"><script>document.write(T('开始','Start'))</script></button>
+        <button onclick="singleStep()"><script>document.write(T('单步','Step'))</script></button>
+        <button onclick="reset()"><script>document.write(T('重置','Reset'))</script></button>
+        <button class="danger" onclick="scatter()"><script>document.write(T('随机','Scatter'))</script></button>
+      </div>
+      <label><script>document.write(T('速度','Speed'))</script> <span id="speedVal">1.0x</span><input type="range" id="speed" min="2" max="40" value="12" oninput="updateControls()"></label>
+      <label><script>document.write(T('蚂蚁数量','Ants'))</script> <span id="countVal">4</span><input type="range" id="antCount" min="3" max="8" value="4" oninput="reset()"></label>
+      <label><script>document.write(T('轨迹长度','Trail'))</script> <span id="trailVal">700</span><input type="range" id="trailLen" min="80" max="1600" value="700" step="40" oninput="updateControls()"></label>
+      <label><script>document.write(T('运动方向','Direction'))</script><select id="direction" onchange="reset()"><option value="1">↻ <script>document.write(T('顺时针追踪','Clockwise chase'))</script></option><option value="-1">↺ <script>document.write(T('逆时针追踪','Counter-clockwise'))</script></option></select></label>
+      <div class="toggles">
+        <label class="toggle"><input type="checkbox" id="showTrail" checked onchange="updateControls()"><script>document.write(T('显示轨迹','Trails'))</script></label>
+        <label class="toggle"><input type="checkbox" id="showVectors" checked onchange="updateControls()"><script>document.write(T('追踪连线','Vectors'))</script></label>
+        <label class="toggle"><input type="checkbox" id="glow" checked onchange="updateControls()"><script>document.write(T('发光','Glow'))</script></label>
+        <label class="toggle"><input type="checkbox" id="autoReset" onchange="updateControls()"><script>document.write(T('自动重开','Auto reset'))</script></label>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="status"><span id="info-text"></span><div class="progress"><i id="progress"></i></div></div>
+  </div>
+</div>
+</div>
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),size=canvas.width,center=size/2,margin=62;
+const palette=['#f43f5e','#3b82f6','#22c55e','#f59e0b','#a855f7','#06b6d4','#f97316','#84cc16'];
+let ants=[],trails=[],running=false,animId=0,lastT=0,stepCount=0,totalTravel=0,initialPerimeter=1;
+let speed=1.2,trailLimit=700,showTrail=true,showVectors=true,glow=true,autoReset=false,dir=1;
+function local(s){return document.getElementById(s)}
+function makeAnts(n,randomize=false){
+  const r=size/2-margin;
+  ants=[];trails=Array.from({length:n},()=>[]);
+  for(let i=0;i<n;i++){
+    const a=-Math.PI/2+i*Math.PI*2/n+(randomize?(Math.random()-.5)*.7:0);
+    const rr=r*(randomize?(.72+Math.random()*.28):1);
+    ants.push({x:center+Math.cos(a)*rr,y:center+Math.sin(a)*rr,target:0,travel:0});
+  }
+  setTargets();
+}
+function setTargets(){const n=ants.length;for(let i=0;i<n;i++)ants[i].target=(i+dir+n)%n}
+function perimeter(){let d=0;for(const a of ants){const t=ants[a.target];d+=Math.hypot(t.x-a.x,t.y-a.y)}return d}
+function centerDistance(){return ants.reduce((s,a)=>s+Math.hypot(a.x-center,a.y-center),0)/ants.length}
+function init(randomize=false){running=false;cancelAnimationFrame(animId);stepCount=0;totalTravel=0;updateControls(false);makeAnts(parseInt(local('antCount').value),randomize);initialPerimeter=perimeter();local('btn-start').textContent=T('开始','Start');draw();updateStats(T('准备','Ready'))}
+function updateControls(redraw=true){speed=parseInt(local('speed').value)/10;trailLimit=parseInt(local('trailLen').value);showTrail=local('showTrail').checked;showVectors=local('showVectors').checked;glow=local('glow').checked;autoReset=local('autoReset').checked;dir=parseInt(local('direction').value);local('speedVal').textContent=speed.toFixed(1)+'x';local('trailVal').textContent=trailLimit;local('countVal').textContent=local('antCount').value;setTargets();renderLegend();if(redraw)draw()}
+function renderLegend(){local('legend').innerHTML=ants.map((_,i)=>'<span><i class="dot" style="background:'+palette[i]+';color:'+palette[i]+'"></i>'+T('蚂蚁','Ant')+' '+(i+1)+'</span>').join('')}
+function physics(dt){const n=ants.length,np=[];let converged=true;for(let i=0;i<n;i++){const a=ants[i],t=ants[a.target],dx=t.x-a.x,dy=t.y-a.y,d=Math.hypot(dx,dy);if(d>7)converged=false;const sp=Math.min(d*.45,68*speed*dt);np.push({x:a.x+(dx/d||0)*sp,y:a.y+(dy/d||0)*sp,step:sp})}
+  for(let i=0;i<n;i++){ants[i].x=np[i].x;ants[i].y=np[i].y;ants[i].travel+=np[i].step;totalTravel+=np[i].step;trails[i].push({x:ants[i].x,y:ants[i].y});while(trails[i].length>trailLimit)trails[i].shift()}
+  stepCount++;if(converged){running=false;local('btn-start').textContent=T('开始','Start');updateStats(T('已汇聚','Converged'));if(autoReset)setTimeout(()=>init(true),900);return false}return true}
+function drawGrid(){ctx.fillStyle='#0b0c14';ctx.fillRect(0,0,size,size);ctx.strokeStyle='#20263a';ctx.lineWidth=1;for(let i=margin;i<=size-margin;i+=38){ctx.beginPath();ctx.moveTo(i,margin);ctx.lineTo(i,size-margin);ctx.moveTo(margin,i);ctx.lineTo(size-margin,i);ctx.stroke()}ctx.strokeStyle='#3b425f';ctx.setLineDash([7,6]);ctx.strokeRect(margin,margin,size-2*margin,size-2*margin);ctx.setLineDash([]);ctx.beginPath();ctx.strokeStyle='rgba(99,102,241,.34)';ctx.arc(center,center,8,0,Math.PI*2);ctx.stroke()}
+function draw(){drawGrid();if(showTrail)trails.forEach((t,i)=>{if(t.length<2)return;ctx.lineWidth=2;ctx.lineJoin='round';for(let j=1;j<t.length;j++){const a=j/t.length;ctx.strokeStyle=hexToRgba(palette[i],a*.7);ctx.beginPath();ctx.moveTo(t[j-1].x,t[j-1].y);ctx.lineTo(t[j].x,t[j].y);ctx.stroke()}});if(showVectors){ctx.lineWidth=1.2;ants.forEach((a,i)=>{const t=ants[a.target];ctx.strokeStyle=hexToRgba(palette[i],.32);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(t.x,t.y);ctx.stroke();drawArrow(a.x,a.y,t.x,t.y,palette[i])})}ants.forEach((a,i)=>{if(glow){ctx.shadowColor=palette[i];ctx.shadowBlur=18}ctx.fillStyle=palette[i];ctx.beginPath();ctx.arc(a.x,a.y,6,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#0b0c14';ctx.font='700 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(i+1,a.x,a.y)})}
+function drawArrow(x1,y1,x2,y2,c){const ang=Math.atan2(y2-y1,x2-x1),x=x1+(x2-x1)*.62,y=y1+(y2-y1)*.62;ctx.fillStyle=hexToRgba(c,.55);ctx.beginPath();ctx.moveTo(x+Math.cos(ang)*7,y+Math.sin(ang)*7);ctx.lineTo(x+Math.cos(ang+2.5)*5,y+Math.sin(ang+2.5)*5);ctx.lineTo(x+Math.cos(ang-2.5)*5,y+Math.sin(ang-2.5)*5);ctx.closePath();ctx.fill()}
+function hexToRgba(h,a){const n=parseInt(h.slice(1),16);return`rgba(${n>>16&255},${n>>8&255},${n&255},${a})`}
+function updateStats(label){const p=perimeter(),cd=centerDistance(),done=Math.max(0,Math.min(1,1-p/initialPerimeter));local('step-count').textContent=stepCount;local('dist-display').textContent=Math.round(p);local('center-display').textContent=cd.toFixed(1);local('status-display').textContent=label||T('运行','Running');local('progress').style.width=(done*100).toFixed(0)+'%';local('info-text').textContent=T(`平均距中心 ${cd.toFixed(1)}px，累计移动 ${Math.round(totalTravel)}px。`,`Mean center distance ${cd.toFixed(1)}px, total travel ${Math.round(totalTravel)}px.`)}
+function loop(t){if(!running)return;const dt=Math.min((t-lastT)/1000||.016,.05);lastT=t;for(let i=0;i<2;i++)if(!physics(dt/2))break;draw();updateStats(T('运行','Running'));animId=requestAnimationFrame(loop)}
+function toggleRun(){running=!running;local('btn-start').textContent=running?T('暂停','Pause'):T('开始','Start');if(running){lastT=performance.now();animId=requestAnimationFrame(loop)}else{cancelAnimationFrame(animId);updateStats(T('暂停','Paused'))}}
+function singleStep(){if(running)toggleRun();physics(.035);draw();updateStats(T('单步','Step'))}
+function reset(){init(false)}
+function scatter(){init(true)}
+init();
+</script>
+</body>
+</html>

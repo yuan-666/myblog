@@ -1,0 +1,8 @@
+# https://yuan6.cn
+User-agent: *
+Allow: /
+
+Sitemap: https://yuan6.cn/sitemap.xml
+
+# IndexNow
+# https://yuan6.cn/indexnow-key.txt

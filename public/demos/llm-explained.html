@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>LLM Explained · Demo</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a14;color:#e4e4e7;padding:16px;min-height:100vh}
+.app{max-width:1000px;margin:0 auto}
+h1{font-size:20px;text-align:center;margin-bottom:16px;color:#fff}
+.tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;justify-content:center}
+.tab{padding:8px 16px;border-radius:8px;border:1px solid #27272a;background:#111122;color:#a1a1aa;font-size:12px;cursor:pointer;transition:all .2s}
+.tab:hover{border-color:#6366f1;color:#e4e4e7}
+.tab.active{background:#6366f1;border-color:#6366f1;color:#fff}
+.panel{background:#111122;border-radius:14px;padding:18px;box-shadow:0 4px 20px rgba(0,0,0,.3);display:none}
+.panel.active{display:block}
+.panel h2{font-size:15px;margin-bottom:12px;color:#fff}
+.panel p{font-size:13px;color:#a1a1aa;line-height:1.7;margin-bottom:10px}
+.input-group{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.input-group input{flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid #27272a;background:#0a0a14;color:#e4e4e7;font-size:13px;font-family:inherit}
+.btn{padding:7px 16px;border-radius:8px;border:1px solid #6366f1;background:#6366f1;color:#fff;font-size:12px;cursor:pointer;font-family:inherit;transition:opacity .2s}
+.btn:hover{opacity:.85}
+.btn.secondary{background:transparent;color:#a1a1aa;border-color:#27272a}
+.btn.secondary:hover{border-color:#6366f1;color:#e4e4e7}
+.token{display:inline-block;padding:3px 8px;margin:2px;border-radius:5px;font-size:12px;font-family:monospace;transition:all .3s;cursor:default}
+.token:hover{transform:translateY(-2px)}
+.token-box{margin:10px 0;padding:12px;background:#0a0a14;border-radius:8px;border:1px solid #27272a;min-height:50px}
+.embedding-viz{display:flex;gap:4px;align-items:flex-end;height:120px;padding:10px;background:#0a0a14;border-radius:8px;border:1px solid #27272a;margin:10px 0;overflow-x:auto}
+.emb-bar{width:6px;border-radius:2px;transition:height .4s;background:linear-gradient(180deg,#6366f1,#a855f7)}
+.attention-grid{display:grid;gap:1px;background:#27272a;border-radius:6px;overflow:hidden;margin:10px 0;width:fit-content}
+.attn-cell{padding:6px 8px;font-size:11px;font-family:monospace;text-align:center;transition:all .3s}
+.attn-label{padding:6px;font-size:10px;color:#71717a;text-align:center;background:#111122}
+.gen-output{padding:12px;background:#0a0a14;border-radius:8px;border:1px solid #27272a;font-size:14px;line-height:1.8;min-height:80px;font-family:monospace}
+.gen-output .highlight{background:rgba(99,102,241,0.3);border-radius:3px;padding:1px 3px}
+.prob-bar{display:flex;align-items:center;gap:6px;margin:3px 0;font-size:11px;font-family:monospace}
+.prob-bar .pname{width:80px;color:#a1a1aa;text-align:right}
+.prob-bar .pbar{flex:1;height:16px;background:#0a0a14;border-radius:4px;overflow:hidden}
+.prob-bar .pfill{height:100%;border-radius:4px;transition:width .5s;background:linear-gradient(90deg,#6366f1,#a855f7)}
+.prob-bar .pval{width:40px;color:#e4e4e7;text-align:right}
+.step-info{font-size:11px;color:#71717a;margin-top:8px;padding:8px;background:#0a0a14;border-radius:6px;border:1px solid #27272a}
+.app{animation:rise .45s ease both}.panel.active{animation:panelIn .22s ease}.tab,.btn{will-change:transform}.tab:hover,.btn:hover{transform:translateY(-1px)}.token{animation:tokenIn .22s ease both}.embedding-viz,.token-box,.gen-output,.step-info{transition:border-color .18s,box-shadow .18s}.embedding-viz:hover,.token-box:hover,.gen-output:hover,.step-info:hover{border-color:#3b4261;box-shadow:0 0 0 3px rgba(99,102,241,.08)}@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes panelIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}@keyframes tokenIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+</style></head>
+<body>
+<script>const L=((p=new URLSearchParams(location.search)).get('lang')||navigator.language.slice(0,2))==='en'?'en':'zh';const T=(zh,en)=>L==='en'?en:zh;</script>
+<div class="app">
+<h1>💬 <script>document.write(T('大语言模型原理 — 交互式 Demo','How LLMs Work — Interactive Demo'))</script></h1>
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('token')"><script>document.write(T('Token 化','Tokenization'))</script></button>
+  <button class="tab" onclick="switchTab('embed')"><script>document.write(T('嵌入向量','Embeddings'))</script></button>
+  <button class="tab" onclick="switchTab('attention')"><script>document.write(T('注意力机制','Attention'))</script></button>
+  <button class="tab" onclick="switchTab('generate')"><script>document.write(T('文本生成','Generation'))</script></button>
+</div>
+
+<div class="panel active" id="panel-token">
+  <h2><script>document.write(T('第一步：Token 化 — 文本 → 数字','Step 1: Tokenization — Text → Numbers'))</script></h2>
+  <p><script>document.write(T('输入任意文本，观察它如何被拆分为 Token。本 Demo 模拟了简单的 BPE 式分词器：常用词为单个 Token，罕见词被拆分为子词。','Type any text and see how it gets split into tokens. This demo simulates a simple BPE-like tokenizer: common words become single tokens, while rare words are split into subwords.'))</script></p>
+  <div class="input-group">
+    <input type="text" id="token-input" value="Large language models are amazing!">
+    <button class="btn" onclick="tokenize()"><script>document.write(T('分词','Tokenize'))</script></button>
+  </div>
+  <div class="token-box" id="token-output"></div>
+  <div class="step-info" id="token-info"></div>
+</div>
+
+<div class="panel" id="panel-embed">
+  <h2><script>document.write(T('第二步：嵌入向量 — Token → 语义向量','Step 2: Embeddings — Tokens → Vectors'))</script></h2>
+  <p><script>document.write(T('每个 Token 被映射到高维向量。下方展示 48 维嵌入向量的可视化。语义相近的词（如"king"和"queen"）具有相似的向量模式。','Each token is mapped to a high-dimensional vector. Below is a 48-dim embedding vector visualization. Similar words (like "king" and "queen") have similar vector patterns.'))</script></p>
+  <div class="input-group">
+    <input type="text" id="embed-input" value="king man woman queen">
+    <button class="btn" onclick="showEmbeddings()"><script>document.write(T('可视化','Visualize'))</script></button>
+  </div>
+  <div id="embed-output"></div>
+  <div class="step-info"><script>document.write(T('<strong>语义算术：</strong>试试 "king man woman queen" — 注意 "king" 和 "queen" 共享相似模式（皇族），而 "man" 和 "woman" 共享另一模式（性别）。在真实嵌入中：king - man + woman ≈ queen。','<strong>Semantic Arithmetic:</strong> Try "king man woman queen" — notice how "king" and "queen" share similar patterns (royalty), while "man" and "woman" share another pattern (gender). In real embeddings: king - man + woman ≈ queen.'))</script></div>
+</div>
+
+<div class="panel" id="panel-attention">
+  <h2><script>document.write(T('第三步：自注意力机制 — 理解上下文','Step 3: Self-Attention — Understanding Context'))</script></h2>
+  <p><script>document.write(T('自注意力让每个 Token 都能"看到"所有其他 Token。热力图展示注意力权重：越亮表示关联越强。点击"动画"观察模型如何解析代词引用关系。','Self-attention lets each token "look at" all other tokens. The heatmap shows attention weights: brighter means stronger connection. Click "Animate" to see how the model resolves pronoun references.'))</script></p>
+  <div class="input-group">
+    <input type="text" id="attn-input" value="The cat sat on the mat because it was warm">
+    <button class="btn" onclick="showAttention()"><script>document.write(T('显示矩阵','Show Matrix'))</script></button>
+    <button class="btn secondary" onclick="animateAttention()"><script>document.write(T('动画','Animate'))</script></button>
+  </div>
+  <div id="attn-output"></div>
+  <div class="step-info" id="attn-info"></div>
+</div>
+
+<div class="panel" id="panel-generate">
+  <h2><script>document.write(T('第四步：自回归生成','Step 4: Autoregressive Generation'))</script></h2>
+  <p><script>document.write(T('给定提示词，模型逐 Token 预测下一个词。调节 Temperature 控制随机性：越低越确定，越高越有创造性。','Given a prompt, the model predicts the next token one at a time. Adjust temperature to control randomness: lower = more deterministic, higher = more creative.'))</script></p>
+  <div class="input-group">
+    <input type="text" id="gen-input" value="Artificial intelligence will">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#a1a1aa"><script>document.write(T('温度','Temp'))</script>: <input type="range" id="gen-temp" min="0.1" max="2" step="0.1" value="0.8" style="width:80px" oninput="document.getElementById('temp-val').textContent=this.value"></label>
+    <span id="temp-val" style="font-size:12px;color:#e4e4e7;font-family:monospace;width:30px">0.8</span>
+    <button class="btn" onclick="generate()"><script>document.write(T('生成','Generate'))</script></button>
+  </div>
+  <div class="gen-output" id="gen-output"></div>
+  <div id="gen-probs"></div>
+  <div class="step-info" id="gen-info"></div>
+</div>
+</div>
+
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+const commonWords = new Set(['the','a','an','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','must','shall','can','need','dare','ought','used','to','of','in','for','on','with','at','by','from','as','into','through','during','before','after','above','below','between','under','and','but','or','yet','so','if','because','although','though','while','where','when','that','which','who','whom','whose','what','this','these','those','i','you','he','she','it','we','they','me','him','her','us','them','my','your','his','its','our','their','mine','yours','hers','ours','theirs','myself','yourself','himself','herself','itself','ourselves','yourselves','themselves','one','ones','all','some','any','no','none','many','much','few','little','most','more','less','least','last','first','second','next','other','another','such','only','own','same','so','than','too','very','just','now','then','here','there','once','again','also','back','still','even','only','just','own','out','up','down','off','over','away','around','about','across','along','among','against','behind','beyond','beside','besides','except','including','regarding','concerning','considering','following','like','near','plus','since','until','upon','within','without','large','language','models','amazing','artificial','intelligence','will','future','technology']);
+
+function tokenize() {
+  const text = document.getElementById('token-input').value;
+  const out = document.getElementById('token-output');
+  const info = document.getElementById('token-info');
+  const words = text.split(/(\s+|[.,!?;:"']+)/).filter(w => w.length > 0);
+  const tokens = [];
+  for (const w of words) {
+    if (/^\s+$/.test(w)) { tokens.push({text: '␣', type: 'space', raw: w}); continue; }
+    const lower = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (commonWords.has(lower)) { tokens.push({text: w, type: 'word', raw: w}); }
+    else if (w.length <= 2) { tokens.push({text: w, type: 'word', raw: w}); }
+    else {
+      const prefix = w.slice(0, Math.ceil(w.length * 0.6));
+      const suffix = w.slice(Math.ceil(w.length * 0.6));
+      tokens.push({text: prefix, type: 'sub', raw: prefix});
+      if (suffix) tokens.push({text: suffix, type: 'sub', raw: suffix});
+    }
+  }
+  const colors = {word: 'rgba(99,102,241,0.25)', sub: 'rgba(168,85,247,0.25)', space: 'rgba(39,39,42,0.5)'};
+  const borders = {word: '#6366f1', sub: '#a855f7', space: '#27272a'};
+  out.innerHTML = tokens.map((t, i) =>
+    `<span class="token" style="background:${colors[t.type]};border:1px solid ${borders[t.type]};color:${t.type==='space'?'#52525b':'#e4e4e7'}" title="Token ${i+1}: ${t.type}">${t.text}</span>`
+  ).join('');
+  const n = tokens.filter(t=>t.type!=='space').length;
+  info.innerHTML = T(`从 ${text.length} 个字符中生成 <strong>${n} 个 Token</strong>。常用词 = 单个 Token，罕见词 = 子词拆分。`,`<strong>${n} tokens</strong> generated from ${text.length} characters. Common words = single tokens, rare words = subword splits.`);
+}
+tokenize();
+
+function seededRandom(seed) { let s = seed; return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; }; }
+
+function showEmbeddings() {
+  const words = document.getElementById('embed-input').value.trim().split(/\s+/).filter(w=>w);
+  const out = document.getElementById('embed-output');
+  if (words.length === 0) return;
+  let html = '';
+  for (const word of words) {
+    let seed = 0;
+    for (let i = 0; i < word.length; i++) seed += word.charCodeAt(i) * (i + 1);
+    const rng = seededRandom(seed);
+    const dims = 48;
+    const values = [];
+    for (let i = 0; i < dims; i++) values.push(rng() * 2 - 1);
+    html += `<div style="margin-bottom:12px"><div style="font-size:12px;color:#a1a1aa;margin-bottom:4px">"${word}" — ${dims}${T('维向量','-dim vector')}</div>`;
+    html += `<div class="embedding-viz">`;
+    for (const v of values) {
+      const h = Math.abs(v) * 100;
+      const opacity = 0.3 + Math.abs(v) * 0.7;
+      html += `<div class="emb-bar" style="height:${h}%;opacity:${opacity}"></div>`;
+    }
+    html += `</div></div>`;
+  }
+  out.innerHTML = html;
+}
+showEmbeddings();
+
+function showAttention() {
+  const text = document.getElementById('attn-input').value;
+  const out = document.getElementById('attn-output');
+  const info = document.getElementById('attn-info');
+  const tokens = text.split(/\s+/).filter(t=>t);
+  if (tokens.length < 2) { out.innerHTML = `<p style="color:#f43f5e">${T('至少需要 2 个单词。','Need at least 2 words.')}</p>`; return; }
+  const n = tokens.length;
+  const attn = [];
+  for (let i = 0; i < n; i++) {
+    attn[i] = [];
+    for (let j = 0; j < n; j++) {
+      let score = 0.05;
+      if (tokens[i].toLowerCase() === tokens[j].toLowerCase()) score += 0.3;
+      if (Math.abs(i - j) <= 1) score += 0.25;
+      if (tokens[i].toLowerCase() === 'it' && j < i && tokens[j].length > 2) score += 0.3;
+      if (['he','she','they','them','their'].includes(tokens[i].toLowerCase()) && j < i && tokens[j].length > 2) score += 0.2;
+      score += (1 - Math.abs(i - j) / n) * 0.15;
+      attn[i][j] = Math.min(score, 1);
+    }
+    const expSum = attn[i].reduce((s, v) => s + Math.exp(v * 3), 0);
+    for (let j = 0; j < n; j++) attn[i][j] = Math.exp(attn[i][j] * 3) / expSum;
+  }
+  let html = '<div class="attention-grid" style="grid-template-columns: auto repeat(' + n + ', 1fr)">';
+  html += '<div class="attn-label"></div>';
+  for (const t of tokens) html += `<div class="attn-label" title="${t}">${t.length > 6 ? t.slice(0,6)+'...' : t}</div>`;
+  for (let i = 0; i < n; i++) {
+    html += `<div class="attn-label" title="${tokens[i]}">${tokens[i].length > 6 ? tokens[i].slice(0,6)+'...' : tokens[i]}</div>`;
+    for (let j = 0; j < n; j++) {
+      const a = attn[i][j];
+      const hue = 240 - a * 180;
+      const bg = `hsla(${hue}, 70%, 50%, ${0.1 + a * 0.5})`;
+      const color = a > 0.5 ? '#fff' : '#a1a1aa';
+      html += `<div class="attn-cell" style="background:${bg};color:${color}" data-i="${i}" data-j="${j}">${a.toFixed(2)}</div>`;
+    }
+  }
+  html += '</div>';
+  out.innerHTML = html;
+  let maxA = 0, maxI = 0, maxJ = 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (attn[i][j] > maxA) { maxA = attn[i][j]; maxI = i; maxJ = j; }
+  info.innerHTML = T(`<strong>最强关联：</strong>"${tokens[maxI]}" → "${tokens[maxJ]}"（权重：${maxA.toFixed(3)}）。每行之和 = 1.00（Softmax）。`,`<strong>Strongest connection:</strong> "${tokens[maxI]}" → "${tokens[maxJ]}" (weight: ${maxA.toFixed(3)}). Each row sums to 1.00 (softmax).`);
+}
+showAttention();
+
+async function animateAttention() {
+  showAttention();
+  const cells = document.querySelectorAll('.attn-cell');
+  for (const c of cells) {
+    c.style.transform = 'scale(1.1)'; c.style.border = '1px solid rgba(99,102,241,0.5)';
+    await new Promise(r => setTimeout(r, 30));
+    c.style.transform = 'scale(1)'; c.style.border = 'none';
+  }
+}
+
+const GLM_PROXY = 'https://myblog-api.8pm.top/api/glm';
+
+async function generate() {
+  const prompt = document.getElementById('gen-input').value;
+  const temp = parseFloat(document.getElementById('gen-temp').value);
+  const out = document.getElementById('gen-output');
+  const probsDiv = document.getElementById('gen-probs');
+  const info = document.getElementById('gen-info');
+
+  if (!prompt.trim()) return;
+
+  out.innerHTML = `<span style="color:#71717a">${T('生成中...','Generating...')}</span>`;
+  probsDiv.innerHTML = '';
+  info.innerHTML = '';
+
+  try {
+    const resp = await fetch(GLM_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'glm-4.7-flash',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: temp,
+        max_tokens: 1024,
+      })
+    });
+
+    const data = await resp.json();
+
+    if (data.error) {
+      out.innerHTML = `<span style="color:#f43f5e">${T('API 错误：','API Error: ')}${data.error.message || data.error}</span>`;
+      return;
+    }
+
+    const reply = data.choices?.[0]?.message?.content || '';
+    out.innerHTML = `<span style="color:#e4e4e7">${reply.replace(/\n/g,'<br>')}</span>`;
+
+    info.innerHTML = T(
+      `<strong>GLM-4.7-Flash</strong> · Temperature = ${temp} · ${T('自回归生成，每次预测下一个 token','Autoregressive generation, predicting next token each step')}`,
+      `<strong>GLM-4.7-Flash</strong> · Temperature = ${temp} · Autoregressive generation, predicting next token each step`
+    );
+  } catch (err) {
+    out.innerHTML = `<span style="color:#f43f5e">${T('网络错误：','Network Error: ')}${err.message}</span>`;
+  }
+}
+</script>
+</body>
+</html>

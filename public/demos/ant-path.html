@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ant Colony Path Planning · Demo</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0b0c14;color:#e4e4e7;min-height:100vh;padding:16px;overflow-x:hidden}
+.app{max-width:1120px;margin:0 auto}
+h1{font-size:22px;font-weight:750;text-align:center;margin-bottom:5px}.sub{font-size:12px;color:#8b8f9f;text-align:center;margin-bottom:14px}
+.main-row{display:grid;grid-template-columns:minmax(340px,560px) 330px;gap:16px;justify-content:center;align-items:start}
+.canvas-wrap{position:relative;background:#101321;border:1px solid #252b40;border-radius:14px;overflow:hidden;box-shadow:0 16px 44px rgba(0,0,0,.38)}
+canvas{display:block;width:100%;height:auto;aspect-ratio:1/1;cursor:crosshair;touch-action:none}
+.overlay{position:absolute;left:10px;right:10px;bottom:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:7px;pointer-events:none}
+.metric{background:rgba(9,11,20,.78);border:1px solid rgba(148,163,184,.16);border-radius:8px;padding:7px 8px;backdrop-filter:blur(10px)}
+.metric b{display:block;font:700 16px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace}.metric span{display:block;margin-top:3px;font-size:9px;color:#8b8f9f;text-transform:uppercase;letter-spacing:.45px}
+.panel{background:#101321;border:1px solid #252b40;border-radius:14px;padding:14px;box-shadow:0 16px 44px rgba(0,0,0,.28);display:grid;gap:11px}
+.section{display:grid;gap:8px}.section-title{font-size:11px;color:#a1a1aa;text-transform:uppercase;letter-spacing:.6px}
+.btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{padding:9px 11px;border-radius:8px;border:1px solid #2a3045;background:#171a2a;color:#e4e4e7;font:600 12px/1.2 inherit;cursor:pointer;transition:transform .15s,background .15s,border-color .15s}
+button:hover{transform:translateY(-1px);background:#20243a;border-color:#3b4364}button.primary{background:#4f46e5;border-color:#6366f1;color:#fff;box-shadow:0 8px 20px rgba(79,70,229,.25)}
+label{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-size:11px;color:#9ca3af}label span{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#d7d9e3}
+input[type=range]{grid-column:1/3;width:100%;accent-color:#6366f1}select{padding:7px 9px;border-radius:8px;border:1px solid #2a3045;background:#0b0c14;color:#e4e4e7;font-size:12px}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.tools button.active{border-color:#22c55e;background:rgba(34,197,94,.12);color:#bbf7d0}
+.toggles{display:grid;grid-template-columns:1fr 1fr;gap:8px}.toggle{display:flex;align-items:center;gap:7px;padding:8px;border:1px solid #252b40;border-radius:8px;background:#0d0f1b;font-size:11px;color:#c4c7d1}.toggle input{accent-color:#6366f1}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;color:#a1a1aa}.dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.status{padding:10px;border-radius:10px;background:#0d0f1b;border:1px solid #252b40;color:#a1a1aa;font-size:12px;line-height:1.45}
+.spark{height:28px;width:100%;display:block;margin-top:7px}
+@media(max-width:880px){body{padding:12px}.main-row{grid-template-columns:1fr}.panel{order:-1}.overlay{grid-template-columns:repeat(2,1fr)}}
+</style></head>
+<body>
+<script>const L=((p=new URLSearchParams(location.search)).get('lang')||navigator.language.slice(0,2))==='en'?'en':'zh';const T=(zh,en)=>L==='en'?en:zh;</script>
+<div class="app">
+<h1><script>document.write(T('蚁群算法网格寻路','Ant Colony Path Planning'))</script></h1>
+<p class="sub"><script>document.write(T('画障碍、调参数，看信息素如何把随机搜索压成稳定路径','Draw walls, tune parameters, and watch pheromones turn random walks into a stable route'))</script></p>
+<div class="main-row">
+  <div class="canvas-wrap">
+    <canvas id="canvas" width="560" height="560"></canvas>
+    <div class="overlay">
+      <div class="metric"><b id="iterDisplay">0</b><span><script>document.write(T('迭代','Iterations'))</script></span></div>
+      <div class="metric"><b id="bestDisplay">-</b><span><script>document.write(T('最优','Best'))</script></span></div>
+      <div class="metric"><b id="successDisplay">0%</b><span><script>document.write(T('成功率','Success'))</script></span></div>
+      <div class="metric"><b id="obsCount">0</b><span><script>document.write(T('障碍','Walls'))</script></span></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="section">
+      <div class="btn-grid">
+        <button class="primary" id="btn-run" onclick="toggleRun()"><script>document.write(T('开始寻路','Start'))</script></button>
+        <button onclick="iterateBatch(8)"><script>document.write(T('推进 8 代','Step 8'))</script></button>
+        <button onclick="resetSearch()"><script>document.write(T('重置搜索','Reset Search'))</script></button>
+        <button onclick="resetAll()"><script>document.write(T('清空重置','Reset All'))</script></button>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title"><script>document.write(T('画笔工具','Brush'))</script></div>
+      <div class="tools">
+        <button id="tool-wall" class="active" onclick="setTool('wall')"><script>document.write(T('障碍','Wall'))</script></button>
+        <button id="tool-erase" onclick="setTool('erase')"><script>document.write(T('橡皮','Erase'))</script></button>
+        <button id="tool-toggle" onclick="setTool('toggle')"><script>document.write(T('切换','Toggle'))</script></button>
+      </div>
+    </div>
+    <div class="section">
+      <label><script>document.write(T('蚂蚁数量','Ants'))</script> <span id="antCountVal">40</span><input type="range" id="antCount" min="8" max="140" value="44" oninput="updateParam()"></label>
+      <label><script>document.write(T('每帧迭代','Batch/frame'))</script> <span id="batchVal">3</span><input type="range" id="batch" min="1" max="12" value="3" oninput="updateParam(false)"></label>
+      <label><script>document.write(T('信息素权重 α','Pheromone α'))</script> <span id="alphaVal">1.0</span><input type="range" id="alpha" min="1" max="50" value="10" oninput="updateParam()"></label>
+      <label><script>document.write(T('启发式权重 β','Heuristic β'))</script> <span id="betaVal">5.0</span><input type="range" id="beta" min="10" max="100" value="50" oninput="updateParam()"></label>
+      <label><script>document.write(T('挥发率 ρ','Evaporation ρ'))</script> <span id="rhoVal">0.10</span><input type="range" id="rho" min="1" max="30" value="10" oninput="updateParam()"></label>
+      <label><script>document.write(T('启发式模式','Heuristic'))</script><select id="heuristic" onchange="updateHeuristic()"><option value="manhattan">Manhattan</option><option value="euclidean">Euclidean</option><option value="diagonal">Diagonal</option><option value="chebyshev">Chebyshev</option><option value="mixed" selected>Mixed</option></select></label>
+    </div>
+    <div class="toggles">
+      <label class="toggle"><input type="checkbox" id="showPheromone" checked onchange="draw()"><script>document.write(T('信息素','Pheromone'))</script></label>
+      <label class="toggle"><input type="checkbox" id="showAnts" checked onchange="draw()"><script>document.write(T('蚂蚁流','Ant flow'))</script></label>
+      <label class="toggle"><input type="checkbox" id="showHeat" checked onchange="draw()"><script>document.write(T('热力网格','Heat cells'))</script></label>
+      <label class="toggle"><input type="checkbox" id="autoMaze" onchange="if(this.checked)randomObstacles()"><script>document.write(T('示例迷宫','Sample maze'))</script></label>
+    </div>
+    <div class="btn-grid">
+      <button onclick="clearObstacles()"><script>document.write(T('清除障碍','Clear Walls'))</script></button>
+      <button onclick="randomObstacles()"><script>document.write(T('随机障碍','Random Walls'))</script></button>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#22c55e"></i><script>document.write(T('起点','Start'))</script></span><span><i class="dot" style="background:#f43f5e"></i><script>document.write(T('终点','End'))</script></span>
+      <span><i class="dot" style="background:#38bdf8"></i><script>document.write(T('最优路径','Best path'))</script></span><span><i class="dot" style="background:#4c1d95"></i><script>document.write(T('信息素','Pheromone'))</script></span>
+    </div>
+    <div class="status"><span id="statusText"></span><canvas class="spark" id="spark" width="300" height="28"></canvas></div>
+  </div>
+</div>
+</div>
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),gw=28,gh=28,cs=canvas.width/gw;
+const start={x:1,y:1},end={x:gw-2,y:gh-2},dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+let grid=[],pheromone=[],running=false,bestPath=[],bestLen=Infinity,iteration=0,animId=0,nAnts=44,alpha=1,beta=5,rho=.1,Q=120,heurMode='mixed',bestIter=0,batch=3,tool='wall',lastAntPaths=[],successRate=0,history=[];
+function id(x){return document.getElementById(x)}
+function initGrid(){grid=Array.from({length:gh},()=>Array(gw).fill(0));resetSearch()}
+function resetSearch(){pheromone=Array.from({length:gh},()=>Array(gw).fill(1));bestPath=[];bestLen=Infinity;iteration=0;bestIter=0;lastAntPaths=[];successRate=0;history=[];draw();updateStats(T('搜索已重置','Search reset'))}
+function updateParam(reset=true){nAnts=parseInt(id('antCount').value);batch=parseInt(id('batch').value);alpha=parseInt(id('alpha').value)/10;beta=parseInt(id('beta').value)/10;rho=parseInt(id('rho').value)/100;id('antCountVal').textContent=nAnts;id('batchVal').textContent=batch;id('alphaVal').textContent=alpha.toFixed(1);id('betaVal').textContent=beta.toFixed(1);id('rhoVal').textContent=rho.toFixed(2);if(reset)resetSearch()}
+function updateHeuristic(){heurMode=id('heuristic').value;resetSearch()}
+function setTool(t){tool=t;document.querySelectorAll('.tools button').forEach(b=>b.classList.remove('active'));id('tool-'+t).classList.add('active')}
+function heuristicDist(x1,y1,x2,y2){const dx=Math.abs(x1-x2),dy=Math.abs(y1-y2);if(heurMode==='manhattan')return dx+dy;if(heurMode==='euclidean')return Math.hypot(dx,dy);if(heurMode==='diagonal')return Math.max(dx,dy)+(Math.SQRT2-1)*Math.min(dx,dy);if(heurMode==='chebyshev')return Math.max(dx,dy);return .6*(dx+dy)+.4*Math.hypot(dx,dy)}
+function antWalk(){let x=start.x,y=start.y;const path=[{x,y}],visited=new Set([x+','+y]);while(x!==end.x||y!==end.y){const opts=[];for(const[dX,dY]of dirs){const nx=x+dX,ny=y+dY;if(nx<0||nx>=gw||ny<0||ny>=gh||grid[ny][nx]||visited.has(nx+','+ny))continue;const tau=Math.pow(Math.max(.001,pheromone[ny][nx]),alpha),eta=Math.pow(1/(heuristicDist(nx,ny,end.x,end.y)+1),beta);opts.push({nx,ny,p:tau*eta})}if(!opts.length)return null;let total=opts.reduce((s,o)=>s+o.p,0),r=Math.random()*total,chosen=opts[0];for(const o of opts){r-=o.p;if(r<=0){chosen=o;break}}x=chosen.nx;y=chosen.ny;path.push({x,y});visited.add(x+','+y);if(path.length>gw*gh)return null}return path}
+function iterate(){for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)pheromone[y][x]=Math.max(.02,pheromone[y][x]*(1-rho));let iterBest=null,iterBestLen=Infinity,success=0;lastAntPaths=[];for(let a=0;a<nAnts;a++){const path=antWalk();if(!path)continue;success++;if(lastAntPaths.length<26)lastAntPaths.push(path);if(path.length<iterBestLen){iterBest=path;iterBestLen=path.length}}successRate=success/nAnts;if(iterBest&&iterBestLen<bestLen){bestPath=iterBest;bestLen=iterBestLen;bestIter=iteration}if(iterBest){const deposit=Q/iterBestLen;for(const p of iterBest)pheromone[p.y][p.x]+=deposit;if(bestPath.length)for(const p of bestPath)pheromone[p.y][p.x]+=deposit*.35}iteration++;history.push(bestLen<Infinity?bestLen:null);if(history.length>80)history.shift()}
+function iterateBatch(n){for(let i=0;i<n;i++)iterate();draw();updateStats(bestLen<Infinity?T('找到路径，继续收敛','Path found, refining'):T('探索中','Exploring'))}
+function runLoop(){if(!running)return;iterateBatch(batch);animId=requestAnimationFrame(runLoop)}
+function toggleRun(){running=!running;id('btn-run').textContent=running?T('暂停','Pause'):T('开始寻路','Start');if(running)runLoop();else cancelAnimationFrame(animId)}
+function resetAll(){running=false;cancelAnimationFrame(animId);id('btn-run').textContent=T('开始寻路','Start');initGrid()}
+function clearObstacles(){for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)grid[y][x]=0;resetSearch()}
+function randomObstacles(){clearObstacles();for(let x=3;x<gw-3;x+=4){for(let y=2;y<gh-2;y++)if(Math.random()<.72)grid[y][x]=1;grid[Math.floor(2+Math.random()*(gh-4))][x]=0;grid[Math.floor(2+Math.random()*(gh-4))][x]=0}for(let i=0;i<90;i++){const x=Math.floor(Math.random()*gw),y=Math.floor(Math.random()*gh);if(isEndpoint(x,y))continue;if(Math.random()<.55)grid[y][x]=1}for(let i=0;i<gw;i++){grid[1][i]=0;grid[gh-2][i]=0}resetSearch()}
+function isEndpoint(x,y){return(x===start.x&&y===start.y)||(x===end.x&&y===end.y)}
+function paint(e,forceToggle=false){const r=canvas.getBoundingClientRect(),scale=canvas.width/r.width,gx=Math.floor((e.clientX-r.left)*scale/cs),gy=Math.floor((e.clientY-r.top)*scale/cs);if(gx<0||gx>=gw||gy<0||gy>=gh||isEndpoint(gx,gy))return;if(tool==='erase')grid[gy][gx]=0;else if(tool==='wall')grid[gy][gx]=1;else if(forceToggle||tool==='toggle')grid[gy][gx]=grid[gy][gx]?0:1;resetSearch()}
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);paint(e,true)});
+canvas.addEventListener('pointermove',e=>{if(e.buttons)paint(e,false)});
+function draw(){ctx.fillStyle='#0b0c14';ctx.fillRect(0,0,canvas.width,canvas.height);let maxP=1;for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)maxP=Math.max(maxP,pheromone[y][x]);if(id('showPheromone').checked){for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){if(grid[y][x])continue;const v=Math.min(1,pheromone[y][x]/maxP);if(v>.03){const alpha=id('showHeat').checked ? .08+v*.54 : v*.24;ctx.fillStyle=`rgba(124,58,237,${alpha})`;ctx.fillRect(x*cs,y*cs,cs,cs)}}}ctx.strokeStyle='rgba(148,163,184,.13)';ctx.lineWidth=.8;for(let i=0;i<=gw;i++){ctx.beginPath();ctx.moveTo(i*cs,0);ctx.lineTo(i*cs,canvas.height);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i*cs);ctx.lineTo(canvas.width,i*cs);ctx.stroke()}if(id('showAnts').checked)drawAntFlow();drawWalls();drawBestPath();drawEndpoint(start,'#22c55e','S');drawEndpoint(end,'#f43f5e','E')}
+function drawWalls(){for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)if(grid[y][x]){const px=x*cs,py=y*cs;ctx.fillStyle='#273244';ctx.fillRect(px+1,py+1,cs-2,cs-2);ctx.fillStyle='rgba(255,255,255,.05)';ctx.fillRect(px+2,py+2,cs-4,3)}}
+function drawBestPath(){if(bestPath.length<2)return;ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowColor='#38bdf8';ctx.shadowBlur=12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(bestPath[0].x*cs+cs/2,bestPath[0].y*cs+cs/2);for(const p of bestPath.slice(1))ctx.lineTo(p.x*cs+cs/2,p.y*cs+cs/2);ctx.stroke();ctx.shadowBlur=0}
+function drawAntFlow(){ctx.lineWidth=1;lastAntPaths.forEach((path,i)=>{if(path.length<2)return;ctx.strokeStyle=`rgba(250,204,21,${.06+(i/lastAntPaths.length)*.16})`;ctx.beginPath();ctx.moveTo(path[0].x*cs+cs/2,path[0].y*cs+cs/2);for(const p of path.slice(1))ctx.lineTo(p.x*cs+cs/2,p.y*cs+cs/2);ctx.stroke()})}
+function drawEndpoint(p,color,label){ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=14;ctx.beginPath();ctx.roundRect(p.x*cs+3,p.y*cs+3,cs-6,cs-6,5);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#071015';ctx.font='700 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,p.x*cs+cs/2,p.y*cs+cs/2)}
+function updateStats(msg){id('iterDisplay').textContent=iteration;id('bestDisplay').textContent=bestLen<Infinity?bestLen:T('-','-');id('successDisplay').textContent=Math.round(successRate*100)+'%';let obs=0;for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)if(grid[y][x])obs++;id('obsCount').textContent=obs;id('statusText').textContent=msg+' · '+(bestLen<Infinity?T(`第 ${bestIter} 代发现当前最优路径。`,`Best path first found at iteration ${bestIter}.`):T('还没有蚂蚁成功抵达终点。','No ant has reached the goal yet.'));drawSpark()}
+function drawSpark(){const s=id('spark'),c=s.getContext('2d');c.clearRect(0,0,s.width,s.height);c.strokeStyle='#252b40';c.beginPath();c.moveTo(0,22);c.lineTo(s.width,22);c.stroke();const vals=history.filter(v=>v);if(vals.length<2)return;const mn=Math.min(...vals),mx=Math.max(...vals),range=Math.max(1,mx-mn);c.strokeStyle='#38bdf8';c.lineWidth=2;c.beginPath();vals.forEach((v,i)=>{const x=i/(vals.length-1)*s.width,y=24-(v-mn)/range*20;if(i)c.lineTo(x,y);else c.moveTo(x,y)});c.stroke()}
+updateParam(false);initGrid();
+</script>
+</body>
+</html>
