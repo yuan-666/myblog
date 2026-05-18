@@ -58,7 +58,7 @@ h1{font-size:20px;text-align:center;margin-bottom:8px;color:#fff}
 <script>
 // ==================== Drawing ====================
 const dc=document.getElementById('drawCanvas'),dctx=dc.getContext('2d');
-let drawing=false;
+let drawing=false, isPredicting=false, activeRunId=0, activeController=null;
 dctx.fillStyle='#000';dctx.fillRect(0,0,280,280);
 dctx.strokeStyle='#fff';dctx.lineWidth=16;dctx.lineCap='round';dctx.lineJoin='round';
 dc.addEventListener('mousedown',e=>{drawing=true;dctx.beginPath();const r=dc.getBoundingClientRect();dctx.moveTo(e.clientX-r.left,e.clientY-r.top)});
@@ -69,7 +69,24 @@ dc.addEventListener('touchstart',e=>{e.preventDefault();drawing=true;dctx.beginP
 dc.addEventListener('touchmove',e=>{e.preventDefault();if(!drawing)return;const r=dc.getBoundingClientRect(),t=e.touches[0];dctx.lineTo(t.clientX-r.left,t.clientY-r.top);dctx.stroke()});
 dc.addEventListener('touchend',()=>drawing=false);
 
-function clearCanvas(){dctx.fillStyle='#000';dctx.fillRect(0,0,280,280);drawViz(null,'');document.getElementById('results').style.display='none';document.getElementById('log').innerHTML='';}
+function setGoButtonIdle(){
+  const btn=document.getElementById('btn-go');
+  btn.disabled=false;btn.textContent=T('识别','Recognize');
+}
+function cancelActiveRun(){
+  activeRunId++;
+  if(activeController){activeController.abort();activeController=null}
+  isPredicting=false;
+  setGoButtonIdle();
+}
+function ensureRun(runId){
+  if(runId!==activeRunId)throw new DOMException('Cancelled','AbortError');
+}
+async function waitStage(ms,runId){
+  await sleep(ms);
+  ensureRun(runId);
+}
+function clearCanvas(){cancelActiveRun();dctx.fillStyle='#000';dctx.fillRect(0,0,280,280);drawViz(null,'');document.getElementById('results').style.display='none';document.getElementById('log').innerHTML='';}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 function getInput(){
@@ -124,6 +141,7 @@ function maxpool(fm,ps){
 function flatten(fm){const out=[];for(const ch of fm)for(const row of ch)for(const v of row)out.push(v);return out}
 function linear(input,w,b){return b.map((bias,o)=>bias+input.reduce((s,v,i)=>s+v*w[i][o],0))}
 function softmax(logits){const m=Math.max(...logits),ex=logits.map(v=>Math.exp(v-m)),sum=ex.reduce((s,v)=>s+v,0);return ex.map(v=>v/sum)}
+function reluVector(values){return values.map(v=>Math.max(0,v))}
 
 // ==================== Visualization ====================
 const vc=document.getElementById('vizCanvas'),vctx=vc.getContext('2d');
@@ -165,6 +183,20 @@ function drawConnections(a,b,cur,stage,pulse){
   if(hot){for(let k=0;k<10;k++){const p=ap[k%ap.length],q=bp[(k*3)%bp.length],t=(pulse+k/10)%1,x=bezier(p.x+14,p.x+50,q.x-50,q.x-14,t),y=bezier(p.y,p.y,q.y,q.y,t);vctx.fillStyle=`rgba(34,211,238,${1-t})`;vctx.beginPath();vctx.arc(x,y,2.2,0,Math.PI*2);vctx.fill()}}
 }
 function bezier(a,b,c,d,t){const mt=1-t;return mt*mt*mt*a+3*mt*mt*t*b+3*mt*t*t*c+t*t*t*d}
+function roundedRect(ctx,x,y,w,h,r){
+  if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,w,h,r);return}
+  const rr=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr,y);
+  ctx.lineTo(x+w-rr,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+rr);
+  ctx.lineTo(x+w,y+h-rr);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-rr,y+h);
+  ctx.lineTo(x+rr,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-rr);
+  ctx.lineTo(x,y+rr);
+  ctx.quadraticCurveTo(x,y,x+rr,y);
+}
 function drawLayer(l,stage,pulse){
   const hot=l.s===stage,pts=nodePositions(l);
   vctx.textAlign='center';vctx.fillStyle=hot?'#fff':'#a1a1aa';vctx.font='700 11px sans-serif';vctx.fillText(l.name,l.x,l.y-pts.length*17-18);
@@ -180,13 +212,13 @@ function drawInputPatch(img,x,y,s){if(!img)return;for(let i=0;i<28;i++)for(let j
 function drawMiniMap(map,x,y,w,h,hot){let mx=0;for(const row of map)for(const v of row)mx=Math.max(mx,v);mx=mx||1;const hh=map.length,ww=map[0].length;for(let i=0;i<hh;i++)for(let j=0;j<ww;j++){const v=Math.max(0,map[i][j])/mx;vctx.fillStyle=`rgba(${56+v*160},${189-v*40},${248-v*130},${.16+v*.82})`;vctx.fillRect(x+j*w/ww,y+i*h/hh,Math.ceil(w/ww),Math.ceil(h/hh))}if(hot){vctx.strokeStyle='#22d3ee';vctx.strokeRect(x-1,y-1,w+2,h+2)}}
 function drawDigitResult(feats,stage){
   if(stage!=='api')return;
-  const pred=feats.apiResult||feats.localDigit||'?';vctx.textAlign='center';vctx.fillStyle='#a855f7';vctx.font='11px sans-serif';vctx.fillText(T('GLM-4.6V-Flash AI 识别','GLM-4.6V-Flash AI Recognition'),720,270);
+  const pred=feats.apiResult??(feats.localDigit!==undefined?feats.localDigit:'?');vctx.textAlign='center';vctx.fillStyle='#a855f7';vctx.font='11px sans-serif';vctx.fillText(T('GLM-4.6V-Flash AI 识别','GLM-4.6V-Flash AI Recognition'),720,270);
   vctx.fillStyle='#fff';vctx.font='700 44px sans-serif';vctx.fillText(pred,720,322);
   if(feats.localDigit!==undefined){vctx.fillStyle='#71717a';vctx.font='10px monospace';vctx.fillText(T('本地 CNN 候选: ','Local CNN guess: ')+feats.localDigit,720,346)}
 }
 function drawPipeline(stage,cur){
   const pipe=[['input',T('输入','Input')],['conv1','Conv1'],['pool1','Pool1'],['conv2','Conv2'],['pool2','Pool2'],['api',T('识别','Result')]],y=430;
-  pipe.forEach((p,i)=>{const x=56+i*126,pi=stageIdx(p[0]),hot=p[0]===stage,past=pi<=cur;vctx.fillStyle=hot?'#1e1b4b':past?'#151a2e':'#0d0f1b';vctx.strokeStyle=hot?'#818cf8':past?'#3b4261':'#24283b';vctx.lineWidth=hot?2:1;vctx.beginPath();vctx.roundRect(x,y,86,32,7);vctx.fill();vctx.stroke();vctx.fillStyle=hot?'#fff':past?'#a1a1aa':'#52525b';vctx.font='10px sans-serif';vctx.textAlign='center';vctx.fillText(p[1],x+43,y+20);if(i<pipe.length-1){vctx.strokeStyle=past?'#6366f1':'#24283b';vctx.beginPath();vctx.moveTo(x+88,y+16);vctx.lineTo(x+122,y+16);vctx.stroke();vctx.fillStyle=vctx.strokeStyle;vctx.fillText('›',x+110,y+20)}})
+  pipe.forEach((p,i)=>{const x=56+i*126,pi=stageIdx(p[0]),hot=p[0]===stage,past=pi<=cur;vctx.fillStyle=hot?'#1e1b4b':past?'#151a2e':'#0d0f1b';vctx.strokeStyle=hot?'#818cf8':past?'#3b4261':'#24283b';vctx.lineWidth=hot?2:1;roundedRect(vctx,x,y,86,32,7);vctx.fill();vctx.stroke();vctx.fillStyle=hot?'#fff':past?'#a1a1aa':'#52525b';vctx.font='10px sans-serif';vctx.textAlign='center';vctx.fillText(p[1],x+43,y+20);if(i<pipe.length-1){vctx.strokeStyle=past?'#6366f1':'#24283b';vctx.beginPath();vctx.moveTo(x+88,y+16);vctx.lineTo(x+122,y+16);vctx.stroke();vctx.fillStyle=vctx.strokeStyle;vctx.fillText('›',x+110,y+20)}})
   vctx.fillStyle='#71717a';vctx.font='10px sans-serif';vctx.textAlign='left';vctx.fillText(stage?T('当前层: ','Layer: ')+stage:'',10,VH-7);
 }
 
@@ -194,76 +226,102 @@ function drawPipeline(stage,cur){
 const GLM_PROXY='https://myblog-api.8pm.top/api/glm';
 
 async function predict(){
+  if(isPredicting)return;
+  isPredicting=true;
+  const runId=++activeRunId;
+  activeController=new AbortController();
   document.getElementById('results').style.display='none';
   const btn=document.getElementById('btn-go');
   btn.disabled=true;btn.textContent='...';
+  const acc={input:[]};
+  try{
   const input=getInput();
-  const acc={input:[]};for(let i=0;i<28;i++){const r=[];for(let j=0;j<28;j++)r.push(input[i*28+j]);acc.input.push(r)}
+  for(let i=0;i<28;i++){const r=[];for(let j=0;j<28;j++)r.push(input[i*28+j]);acc.input.push(r)}
 
   // Stage 1: Input
   drawViz(acc,'input');
   document.getElementById('log').innerHTML=T('📥 <b>输入层</b>：28×28=784 维灰度图像','📥 <b>Input</b>: 28×28=784-dim grayscale');
-  await sleep(800);
+  await waitStage(800,runId);
 
   // Conv1
   const c1=conv2d([acc.input],CNN_WEIGHTS.conv1_k,CNN_WEIGHTS.conv1_b);
   acc.a1=relu(c1);
   drawViz(acc,'conv1');
   document.getElementById('log').innerHTML=T('🔍 <b>Conv1</b>：4个 3×3 卷积核 → 26×26×4 特征图','🔍 <b>Conv1</b>: 4 filters 3×3 → 26×26×4 feature maps');
-  await sleep(1000);
+  await waitStage(1000,runId);
 
   // Pool1
   acc.p1=maxpool(acc.a1,2);
   drawViz(acc,'pool1');
   document.getElementById('log').innerHTML=T('⬇ <b>MaxPool 2×2</b>：降采样 → 13×13×4','⬇ <b>MaxPool 2×2</b>: downsampled → 13×13×4');
-  await sleep(800);
+  await waitStage(800,runId);
 
   // Conv2
   const c2=conv2d(acc.p1,CNN_WEIGHTS.conv2_k,CNN_WEIGHTS.conv2_b);
   acc.a2=relu(c2);
   drawViz(acc,'conv2');
   document.getElementById('log').innerHTML=T('🔍 <b>Conv2</b>：8个 3×3 卷积核 → 11×11×8 特征图','🔍 <b>Conv2</b>: 8 filters 3×3 → 11×11×8 feature maps');
-  await sleep(1000);
+  await waitStage(1000,runId);
 
   // Pool2
   acc.p2=maxpool(acc.a2,2);
   const flat=flatten(acc.p2);
-  const fc1=relu([linear(flat,CNN_WEIGHTS.fc1_w,CNN_WEIGHTS.fc1_b)])[0];
-  const logits=linear(fc1,CNN_WEIGHTS.fc2_w,CNN_WEIGHTS.fc2_b);
+  const fc1=reluVector(linear(flat,CNN_WEIGHTS.fc1_W||CNN_WEIGHTS.fc1_w,CNN_WEIGHTS.fc1_b));
+  const logits=linear(fc1,CNN_WEIGHTS.fc2_W||CNN_WEIGHTS.fc2_w,CNN_WEIGHTS.fc2_b);
   acc.probs=softmax(logits);
   acc.localDigit=acc.probs.indexOf(Math.max(...acc.probs));
   drawViz(acc,'pool2');
   document.getElementById('log').innerHTML=T(`⬇ <b>MaxPool 2×2</b> → 200 维；本地 CNN 候选为 <b>${acc.localDigit}</b>，同时送入 AI 识别。`,`⬇ <b>MaxPool 2×2</b> → 200 dims; local CNN candidate is <b>${acc.localDigit}</b>, then AI recognition starts.`);
-  await sleep(800);
+  await waitStage(800,runId);
 
   // API call
   drawViz(acc,'api');
   document.getElementById('log').innerHTML=T('🤖 <b>GLM-4.6V-Flash</b> AI 多模态识别中...','🤖 <b>GLM-4.6V-Flash</b> AI analyzing...');
   const b64=dc.toDataURL('image/png').split(',')[1];
   let apiDigit='?', apiError='';
+  let timeoutId=null;
   try{
-    const resp=await fetch(GLM_PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'glm-4.6v-flash',messages:[{role:'user',content:[{type:'image_url',image_url:{url:`data:image/png;base64,${b64}`}},{type:'text',text:'这张图片中手写的是哪个数字(0-9)？只回复一个数字，不要其他内容。'}]}]})});
+    timeoutId=setTimeout(()=>activeController?.abort(),9000);
+    const resp=await fetch(GLM_PROXY,{method:'POST',headers:{'Content-Type':'application/json'},signal:activeController.signal,body:JSON.stringify({model:'glm-4.6v-flash',messages:[{role:'user',content:[{type:'image_url',image_url:{url:`data:image/png;base64,${b64}`}},{type:'text',text:'这张图片中手写的是哪个数字(0-9)？只回复一个数字，不要其他内容。'}]}]})});
+    ensureRun(runId);
     if(!resp.ok){apiError='HTTP '+resp.status;const e=await resp.text();try{const j=JSON.parse(e);apiError+=': '+(j.error||j.detail||e)}catch{apiError+=': '+e.slice(0,100)}}
     else{
       const data=await resp.json();
       const reply=data.choices?.[0]?.message?.content||(data.content||'');
       apiDigit=reply.trim().match(/\d/)?.[0]||'?';
     }
-  }catch(e){apiError='Network: '+e.message}
+  }catch(e){apiError=e.name==='AbortError'?T('AI 请求超时，已使用本地 CNN 结果兜底','AI request timed out, using the local CNN fallback'):'Network: '+e.message}
+  finally{if(timeoutId)clearTimeout(timeoutId)}
+  ensureRun(runId);
+  if(!/^\d$/.test(apiDigit))apiDigit=String(acc.localDigit);
   acc.apiResult=apiDigit;
   drawViz(acc,'api');
 
   // Show result
   if(apiError){
-    document.getElementById('log').innerHTML=T('❌ <b>API 错误</b>: '+apiError,'❌ <b>API Error</b>: '+apiError);
+    const pct=Math.max(1,Math.round((acc.probs[Number(apiDigit)]??0)*100));
+    document.getElementById('bars').innerHTML=`<div class="result-bar"><span class="rd" style="color:#f59e0b">${apiDigit}</span><div class="rb"><div class="rf" style="width:${pct}%;background:linear-gradient(90deg,#f59e0b,#22c55e)"></div></div><span class="rp">${pct}%</span></div>`;
+    document.getElementById('pred').innerHTML=`<span style="font-size:36px">${apiDigit}</span> ${T('本地 CNN 兜底结果','Local CNN fallback')}`;
+    document.getElementById('results').style.display='block';
+    document.getElementById('log').innerHTML=T('⚠️ <b>AI 识别未完成</b>：'+apiError+'；展示已切换为本地 CNN 结果。','⚠️ <b>AI recognition did not finish</b>: '+apiError+'; showing the local CNN result instead.');
   } else {
     document.getElementById('bars').innerHTML=`<div class="result-bar"><span class="rd" style="color:#22c55e">${apiDigit}</span><div class="rb"><div class="rf" style="width:100%;background:linear-gradient(90deg,#22c55e,#16a34a)"></div></div><span class="rp">100%</span></div>`;
     document.getElementById('pred').innerHTML=`<span style="font-size:36px">${apiDigit}</span> ${T('GLM-4.6V-Flash 识别','GLM-4.6V-Flash')}`;
     document.getElementById('results').style.display='block';
     document.getElementById('log').innerHTML=T(`✅ <b>AI 识别结果: ${apiDigit}</b> — GLM-4.6V-Flash 多模态模型`,`✅ <b>AI Result: ${apiDigit}</b> — GLM-4.6V-Flash vision model`);
   }
-
-  btn.disabled=false;btn.textContent=T('识别','Recognize');
+  }catch(e){
+    if(e.name!=='AbortError'){
+      document.getElementById('log').innerHTML=T('⚠️ <b>识别流程已恢复</b>：动画过程中出现异常，请重试。','⚠️ <b>Recognition recovered</b>: an animation error occurred; please try again.');
+      console.error(e);
+    }
+  }finally{
+    if(runId===activeRunId){
+      isPredicting=false;
+      activeController=null;
+      setGoButtonIdle();
+    }
+  }
 }
 drawViz(null,'');
 </script></body></html>
