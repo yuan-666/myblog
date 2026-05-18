@@ -33,14 +33,28 @@ const demoUrls: Record<string, string> = {
   'llm-explained': './demos/llm-explained.html',
 }
 
+const demoVersions: Record<string, string> = {
+  'cnn-digit': '20260518-2',
+}
+
 const demoUrl = demoUrls[props.postId] || ''
 const isExternal = demoUrl.startsWith('http')
 
+function appendParam(url: string, key: string, value: string) {
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}${key}=${encodeURIComponent(value)}`
+}
+
+const versionedDemoUrl = computed(() => {
+  if (!demoUrl || isExternal) return demoUrl
+  const version = demoVersions[props.postId]
+  return version ? appendParam(demoUrl, 'v', version) : demoUrl
+})
+
 // Add locale param to local demos so they can follow the site language
 const iframeSrc = computed(() => {
-  if (!demoUrl || isExternal) return demoUrl
-  const sep = demoUrl.includes('?') ? '&' : '?'
-  return demoUrl + sep + 'lang=' + locale.value
+  if (!versionedDemoUrl.value || isExternal) return versionedDemoUrl.value
+  return appendParam(versionedDemoUrl.value, 'lang', locale.value)
 })
 
 // Post-specific labels
@@ -87,8 +101,8 @@ onUnmounted(() => observer?.disconnect())
       <!-- Browser chrome bar -->
       <div class="browser-bar">
         <span class="browser-dots"><span></span><span></span><span></span></span>
-        <span class="browser-url">{{ demoUrl }}</span>
-        <a :href="demoUrl" target="_blank" rel="noopener" class="browser-open" :aria-label="isZh() ? '新窗口打开演示' : 'Open demo in new tab'" :title="isZh() ? '新窗口打开' : 'Open in new tab'">
+        <span class="browser-url">{{ versionedDemoUrl }}</span>
+        <a :href="iframeSrc" target="_blank" rel="noopener" class="browser-open" :aria-label="isZh() ? '新窗口打开演示' : 'Open demo in new tab'" :title="isZh() ? '新窗口打开' : 'Open in new tab'">
           <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
         </a>
       </div>
